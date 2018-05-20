@@ -9,12 +9,27 @@
 
 # What is it?
 
-`ggsupplyDemand` is a package that makes it extremely easy to plot supply and demand with ggplot2.
+`ggsupplyDemand` is a package that makes it extremely easy to plot supply and demand with `ggplot2`.
 
 ```{r message=FALSE, warning=FALSE}
 library(ggsupplyDemand)
 
 create_supply_and_demand() %>% 
   shift_demand(outwards = TRUE) %>% 
-  plot_supply_and_demand()
+  plot_supply_and_demand(consumer_surplus = TRUE)
 ```
+
+# Acknowledgment
+
+`ggsupplyDemand` wouldn't exist without [Andrew Heiss](https://www.andrewheiss.com) from Brigham Young University and his [post](https://www.andrewheiss.com/blog/2017/09/15/create-supply-and-demand-economics-curves-with-ggplot2/) doing most of the heavylifting that `ggsupplyDemand` leverages. 
+
+# Install it!
+
+```{r eval=FALSE, message=FALSE, warning=FALSE, include=FALSE}
+if (!require(devtools)) {
+  install.packages("devtools")
+}
+devtools::install_github("David-Salazar/ggsupplyDemand")
+```
+
+
