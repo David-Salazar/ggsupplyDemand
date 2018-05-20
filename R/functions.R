@@ -32,56 +32,22 @@ create_supply_and_demand <- function(qd = 1000,
                                      a = 10,
                                      b = 5) {
 
-  x <- seq(0, 2 * (qd - qs)/(a + b), length.out = 4)
-
-  supply <- Hmisc::bezier(x,
-                          qs + b*x) %>%
-    tibble::as_data_frame() %>%
-    dplyr::rename(supply = y)
+  x <- seq(0, qs + b*2 * (qd - qs)/(a + b), length.out = 4)
 
   demand <- Hmisc::bezier(x,
-                          qd - a*x) %>%
+                          (qd - x)/a) %>%
     tibble::as_data_frame() %>%
     dplyr::rename(demand = y)
 
-  dplyr::left_join(supply, demand, by = "x")
+  supply <- Hmisc::bezier(x,
+                          (x - qs)/b) %>%
+    tibble::as_data_frame() %>%
+    dplyr::rename(supply = y)
+
+  dplyr::left_join(demand, supply, by = "x")
 }
 
 
-# shift curve ------------------------------------------------------------
-
-#' @title Curve Shifter
-#' @description Shift one of the curves in the tibble from \code{create_supply_and_demand()}.
-#' @param supply_and_demand_system A tibble created with \code{create_supply_and_demand()}
-#' @param curve The curve that you want to shift from the tibble.
-#' @param outwards Whether you want to shift the curve outwards or not. Default: TRUE
-#' @return A tibble with an added curve that results from the shift.
-#' @details Not exposed to the user. Just for internal use in the programming.
-#' @rdname shift_curve
-#' @seealso
-#'  \code{\link[stringr]{str_detect}}
-#'  \code{\link[dplyr]{mutate}}
-#'  \code{\link[rlang]{quo_name}}
-#' @importFrom stringr str_detect
-#' @importFrom magrittr "%>%"
-#' @importFrom dplyr mutate
-#' @import rlang
-shift_curve <- function(supply_and_demand_system, curve, outwards = TRUE) {
-
-  if (outwards) {
-    plus_minus = 1
-  } else {
-    plus_minus = -1
-  }
-
-  col_names <- colnames(supply_and_demand_system)
-  number_of_demands <- length(col_names[stringr::str_detect(col_names, quo_name(curve))])
-
-  supply_and_demand_system %>%
-    dplyr::mutate(!! paste0(rlang::quo_name(curve), number_of_demands) := !!curve + (plus_minus) * mean(!!curve)/2)
-
-
-}
 
 #' @title Shift Demand
 #' @description Takes a tibble that represents a system of supply and demand and
@@ -105,9 +71,32 @@ shift_curve <- function(supply_and_demand_system, curve, outwards = TRUE) {
 #' @seealso
 #'  \code{\link[rlang]{enquo}}
 #' @import rlang
-shift_demand <- function(supply_and_demand_system, outwards = TRUE, curve = demand) {
+shift_demand <- function(supply_and_demand_system, outwards = TRUE, curve = demand,
+                         shifter = 1000/4,
+                         qd = 1000,
+                         qs = 250,
+                         a = 10,
+                         b = 5) {
   curve <- rlang::enquo(curve)
-  shift_curve(supply_and_demand_system, curve, outwards)
+
+  x <- seq(0, qs + b*2 * (qd - qs)/(a + b), length.out = 4)
+
+  if (outwards) {
+    plus_minus = 1
+  } else {
+    plus_minus = -1
+  }
+
+  demands <- Hmisc::bezier(x,
+                          ((qd + plus_minus * shifter) - x)/a) %>%
+    tibble::as_data_frame() %>%
+    dplyr::rename(demand = y)
+
+  col_names <- colnames(supply_and_demand_system)
+  number_of_demands <- length(col_names[stringr::str_detect(col_names, "demand")])
+  name <- paste0("demand", number_of_demands)
+  supply_and_demand_system %>%
+    dplyr::mutate(!! name := c(demands$demand))
 
 }
 
@@ -132,9 +121,30 @@ shift_demand <- function(supply_and_demand_system, outwards = TRUE, curve = dema
 #' @seealso
 #'  \code{\link[rlang]{enquo}}
 #' @import rlang
-shift_supply <- function(supply_and_demand_system, outwards = TRUE, curve = supply) {
+shift_supply <- function(supply_and_demand_system, outwards = TRUE, curve = supply,
+                         shifter = 250/2,
+                         qd = 1000,
+                         qs = 250,
+                         a = 10,
+                         b = 5) {
   curve <- rlang::enquo(curve)
-  shift_curve(supply_and_demand_system, curve, !outwards)
+  x <- seq(0, qs + b*2 * (qd - qs)/(a + b), length.out = 4)
+  if (outwards) {
+    plus_minus = 1
+  } else {
+    plus_minus = -1
+  }
+
+  supplys <- Hmisc::bezier(x,
+                         (x - (qs + plus_minus * shifter))/b) %>%
+    tibble::as_data_frame() %>%
+    dplyr::rename(supply = y)
+
+  col_names <- colnames(supply_and_demand_system)
+  number_of_supplies <- length(col_names[stringr::str_detect(col_names, "supply")])
+  name <- paste0("supply", number_of_supplies)
+  supply_and_demand_system %>%
+    dplyr::mutate(!! name := c(supplys$supply))
 
 }
 
@@ -175,16 +185,17 @@ curve_intersect_two <- function(df) {
 #'  \code{\link[dplyr]{select}},\code{\link[dplyr]{bind_rows}}
 #' @importFrom dplyr select bind_rows
 #' @importFrom magrittr "%>%"
+#' @importFrom dplyr starts_with
 find_all_intersections <- function(supply_and_demand_system) {
 
   x <- supply_and_demand_system$x
 
   supply_curves <- supply_and_demand_system %>%
-    dplyr::select(starts_with("supply"))
+    dplyr::select(dplyr::starts_with("supply"))
 
 
   demand_curves <- supply_and_demand_system %>%
-    dplyr::select(starts_with("demand"))
+    dplyr::select(dplyr::starts_with("demand"))
 
   map(supply_curves, function(y) for_each(y, demand_curves, x)) %>%
     dplyr::bind_rows(.id = "id")
@@ -238,6 +249,7 @@ for_each <- function(curve, other_set_curves, x) {
 #' @importFrom purrr map
 #' @import ggplot2
 #' @importFrom magrittr "%>%"
+#' @importFrom stringr str_detect
 plot_supply_and_demand <- function(supply_and_demand_system,
                         consumer_surplus = TRUE) {
 
@@ -245,7 +257,7 @@ plot_supply_and_demand <- function(supply_and_demand_system,
 
   data <- supply_and_demand_system %>%
     tidyr::gather(key = "curve", value = y, -x) %>%
-    dplyr::mutate(var = ifelse(str_detect(curve, "supply"), "supply", "demand"))
+    dplyr::mutate(var = ifelse(stringr::str_detect(curve, "supply"), "supply", "demand"))
 
   supply <- data %>% dplyr::filter(curve == "supply")
   demand <- data %>% dplyr::filter(curve == "demand")
@@ -264,8 +276,10 @@ plot_supply_and_demand <- function(supply_and_demand_system,
     geom_segment(data = intersection,
                  aes(x = 0, y = y, xend = x, yend = y), lty = "dotted") +
     geom_point(data = intersection, aes(y = y), size = 3) +
-    scale_x_continuous(expand = c(0, 0)) +
-    scale_y_continuous(expand = c(0, 0)) +
+    scale_x_continuous(expand = c(0, 0), limits = c(0, NA),
+                       breaks = intersection$x, labels = round(intersection$x,0)) +
+    scale_y_continuous(expand = c(0, 0), limits = c(0, NA),
+                       breaks = intersection$y, labels = round(intersection$y,0)) +
     theme_classic() +
     labs(x = "Quantity",
          y = "Price")
