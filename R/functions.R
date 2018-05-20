@@ -266,7 +266,9 @@ plot_supply_and_demand <- function(supply_and_demand_system,
     geom_point(data = intersection, aes(y = y), size = 3) +
     scale_x_continuous(expand = c(0, 0)) +
     scale_y_continuous(expand = c(0, 0)) +
-    theme_classic()
+    theme_classic() +
+    labs(x = "Quantity",
+         y = "Price")
 
   if (consumer_surplus) {
     demandas <- data %>% filter(var == "demand") %>% pull(curve) %>% unique()
